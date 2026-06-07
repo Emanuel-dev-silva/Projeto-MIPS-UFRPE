@@ -2,11 +2,18 @@
 // Projeto MIPS Monociclo
 // Arquitetura e Organização de Computadores
 // UFRPE
+//
+// Esse arquivo junta os módulos principais
+// do processador MIPS que estamos montando.
 // _____________________________________
 
 
 // _____________________________________
 // PC
+//
+// O PC guarda o endereço da instrução atual.
+// A cada subida do clock ele recebe o próximo
+// endereço. Se reset estiver ligado, volta para 0.
 // _____________________________________
 
 module pc(
@@ -29,6 +36,11 @@ endmodule
 
 // _____________________________________
 // Banco de Registradores
+//
+// Aqui ficam os 32 registradores do MIPS.
+// Dá para ler dois registradores ao mesmo tempo
+// e escrever em um registrador na subida do clock.
+// O registrador 0 não pode ser alterado.
 // _____________________________________
 
 module regfile(
@@ -58,12 +70,16 @@ begin
         for(i = 0; i < 32; i = i + 1)
             regs[i] <= 32'd0;
     end
+
+    // Só escreve se RegWrite estiver ligado
+    // e se o registrador não for o R0.
     else if(RegWrite && (WriteAddr != 0))
     begin
         regs[WriteAddr] <= WriteData;
     end
 end
 
+// As leituras são diretas, sem precisar de clock.
 assign ReadData1 = regs[ReadAddr1];
 assign ReadData2 = regs[ReadAddr2];
 
@@ -72,6 +88,9 @@ endmodule
 
 // _____________________________________
 // ULA
+//
+// A ULA faz as contas e operações lógicas.
+// O código OP diz qual operação ela deve fazer.
 // _____________________________________
 
 module ula(
@@ -87,27 +106,35 @@ always @(*)
 begin
     case(OP)
 
+        // Soma
         4'b0000:
             result = In1 + In2;
 
+        // Subtração
         4'b0001:
             result = In1 - In2;
 
+        // AND
         4'b0010:
             result = In1 & In2;
 
+        // OR
         4'b0011:
             result = In1 | In2;
 
+        // XOR
         4'b0100:
             result = In1 ^ In2;
 
+        // NOR
         4'b0101:
             result = ~(In1 | In2);
 
+        // SLT com sinal
         4'b0110:
             result = ($signed(In1) < $signed(In2)) ? 32'd1 : 32'd0;
 
+        // SLTU sem sinal
         4'b0111:
             result = (In1 < In2) ? 32'd1 : 32'd0;
 
@@ -117,6 +144,8 @@ begin
     endcase
 end
 
+// Essa flag fica 1 quando o resultado da ULA é zero.
+// Ela vai ser útil para instruções tipo beq.
 assign Zero_flag = (result == 0);
 
 endmodule
@@ -124,6 +153,10 @@ endmodule
 
 // _____________________________________
 // Controle da ULA
+//
+// Esse módulo recebe o ALUOp da unidade de controle
+// e o funct da instrução tipo R.
+// A partir disso ele escolhe a operação da ULA.
 // _____________________________________
 
 module ula_ctrl(
@@ -137,15 +170,15 @@ always @(*)
 begin
     case(ALUOp)
 
-        // lw, sw, addi
+        // Para lw, sw e addi a ULA faz soma.
         2'b00:
             OP = 4'b0000;
 
-        // beq
+        // Para beq a ULA faz subtração.
         2'b01:
             OP = 4'b0001;
 
-        // tipo R
+        // Para instruções tipo R, o funct decide.
         2'b10:
         begin
             case(funct)
@@ -176,6 +209,10 @@ endmodule
 
 // _____________________________________
 // Unidade de Controle
+//
+// Esse é o módulo que olha o opcode da instrução
+// e liga/desliga os sinais do processador.
+// Ele basicamente diz o caminho que a instrução vai seguir.
 // _____________________________________
 
 module ctrl(
@@ -194,6 +231,8 @@ module ctrl(
 
 always @(*)
 begin
+    // Primeiro tudo começa desligado.
+    // Depois cada instrução liga só o que precisa.
     RegDst   = 0;
     ALUSrc   = 0;
     MemtoReg = 0;
@@ -205,7 +244,7 @@ begin
 
     case(opcode)
 
-        // R-Type
+        // Instruções tipo R
         6'b000000:
         begin
             RegDst   = 1;
@@ -213,7 +252,7 @@ begin
             ALUOp    = 2'b10;
         end
 
-        // addi
+        // addi usa imediato e escreve no registrador rt.
         6'b001000:
         begin
             RegDst   = 0;
@@ -222,9 +261,10 @@ begin
             ALUOp    = 2'b00;
         end
 
-        // lw
+        // lw calcula endereço, lê da memória e escreve no registrador.
         6'b100011:
         begin
+            RegDst   = 0;
             ALUSrc   = 1;
             MemtoReg = 1;
             RegWrite = 1;
@@ -232,7 +272,7 @@ begin
             ALUOp    = 2'b00;
         end
 
-        // sw
+        // sw calcula endereço e escreve na memória.
         6'b101011:
         begin
             ALUSrc   = 1;
@@ -240,7 +280,7 @@ begin
             ALUOp    = 2'b00;
         end
 
-        // beq
+        // beq compara dois registradores.
         6'b000100:
         begin
             Branch = 1;
@@ -249,6 +289,7 @@ begin
 
         default:
         begin
+            // Se não reconhecer a instrução, não faz nada.
         end
 
     endcase
@@ -258,7 +299,11 @@ endmodule
 
 
 // _____________________________________
-// Memória de instruções
+// Memória de Instruções
+//
+// Aqui fica o "programa" que o processador vai executar.
+// Cada posição guarda uma instrução de 32 bits.
+// Como o PC anda de 4 em 4, usamos addr[31:2].
 // _____________________________________
 
 module i_mem(
@@ -274,6 +319,8 @@ begin
     mem[1] = 32'h200A0005; // addi $t2, $zero, 5
     mem[2] = 32'h012A4020; // add  $t0, $t1, $t2
     mem[3] = 32'h012A4822; // sub  $t1, $t1, $t2
+    mem[4] = 32'hAC080000; // sw   $t0, 0($zero)
+    mem[5] = 32'h8C0B0000; // lw   $t3, 0($zero)
 end
 
 assign instruction = mem[addr[31:2]];
@@ -282,7 +329,11 @@ endmodule
 
 
 // _____________________________________
-// Memória de dados
+// Memória de Dados
+//
+// Essa memória é usada pelas instruções lw e sw.
+// sw grava um valor nela.
+// lw lê um valor dela.
 // _____________________________________
 
 module d_mem(
@@ -307,12 +358,14 @@ begin
         mem[i] = 32'd0;
 end
 
+// Escrita na memória acontece na subida do clock.
 always @(posedge clk)
 begin
     if(MemWrite)
         mem[addr[31:2]] <= write_data;
 end
 
+// Leitura é feita de forma combinacional.
 always @(*)
 begin
     if(MemRead)
@@ -325,7 +378,13 @@ endmodule
 
 
 // _____________________________________
-// Top Level do processador
+// Top Level do Processador
+//
+// Esse módulo junta tudo.
+// Aqui o PC busca a instrução, a instrução é decodificada,
+// os registradores são lidos, a ULA executa,
+// a memória pode ser acessada e o resultado pode voltar
+// para o banco de registradores.
 // _____________________________________
 
 module mips(
@@ -348,6 +407,17 @@ wire [3:0] ALUControl;
 wire [31:0] ALUResult;
 wire Zero;
 
+wire [31:0] MemReadData;
+
+
+// _____________________________________
+// Separando os campos da instrução
+//
+// A instrução tem 32 bits.
+// Aqui pegamos pedaços dela: opcode, rs, rt, rd,
+// funct e imediato.
+// _____________________________________
+
 wire [5:0] opcode;
 wire [4:0] rs;
 wire [4:0] rt;
@@ -362,6 +432,11 @@ assign rd     = instruction[15:11];
 assign imm    = instruction[15:0];
 assign funct  = instruction[5:0];
 
+
+// _____________________________________
+// Sinais de controle
+// _____________________________________
+
 wire RegDst;
 wire ALUSrc;
 wire MemtoReg;
@@ -372,19 +447,40 @@ wire Branch;
 
 wire [1:0] ALUOp;
 
+
+// _____________________________________
+// Sinais auxiliares
+// _____________________________________
+
 wire [4:0] WriteAddr;
 wire [31:0] WriteData;
 
 wire [31:0] SignExtImm;
 wire [31:0] ALUIn2;
 
+// O imediato tem 16 bits, mas a ULA trabalha com 32.
+// Então fazemos extensão de sinal.
 assign SignExtImm = {{16{imm[15]}}, imm};
+
+// Se ALUSrc for 1, a ULA usa o imediato.
+// Se for 0, usa o segundo registrador.
 assign ALUIn2 = (ALUSrc) ? SignExtImm : ReadData2;
 
+// Tipo R escreve em rd.
+// Tipo I escreve em rt.
 assign WriteAddr = (RegDst) ? rd : rt;
-assign WriteData = ALUResult;
 
+// Se for lw, escreve o dado vindo da memória.
+// Caso contrário, escreve o resultado da ULA.
+assign WriteData = (MemtoReg) ? MemReadData : ALUResult;
+
+// Por enquanto o PC só anda para a próxima instrução.
 assign nextPC = PC + 4;
+
+
+// _____________________________________
+// Ligando os módulos
+// _____________________________________
 
 pc pc0(
     .clk(clk),
@@ -442,6 +538,27 @@ ula ula0(
     .result(ALUResult),
     .Zero_flag(Zero)
 );
+
+d_mem dmem0(
+    .clk(clk),
+
+    .MemRead(MemRead),
+    .MemWrite(MemWrite),
+
+    .addr(ALUResult),
+    .write_data(ReadData2),
+
+    .read_data(MemReadData)
+);
+
+
+// _____________________________________
+// Saídas de debug
+//
+// Essas saídas são só para facilitar o teste.
+// Elas ajudam a ver o que está acontecendo
+// dentro do processador.
+// _____________________________________
 
 assign debug_pc = PC;
 assign debug_instruction = instruction;
