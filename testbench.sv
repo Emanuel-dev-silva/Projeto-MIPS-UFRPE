@@ -1,9 +1,9 @@
 module testbench;
 
 
-// ======================================
-// TESTE DO PC
-// ======================================
+// _____________________________________
+// Teste do PC
+// _____________________________________
 
 reg clk;
 reg reset;
@@ -19,9 +19,9 @@ pc pc_test(
 );
 
 
-// ======================================
-// TESTE DA ULA
-// ======================================
+// _____________________________________
+// Teste da ULA
+// _____________________________________
 
 reg [31:0] In1;
 reg [31:0] In2;
@@ -39,9 +39,9 @@ ula ula_test(
 );
 
 
-// ======================================
-// TESTE DO REGFILE
-// ======================================
+// _____________________________________
+// Teste do banco de registradores
+// _____________________________________
 
 reg [4:0] ReadAddr1;
 reg [4:0] ReadAddr2;
@@ -70,23 +70,24 @@ regfile regfile_test(
 );
 
 
-// ======================================
-// CLOCK
-// ======================================
+// _____________________________________
+// Geração do clock
+// Troca de estado a cada 5 unidades
+// _____________________________________
 
 always #5 clk = ~clk;
 
 
-// ======================================
-// TESTES
-// ======================================
+// _____________________________________
+// Sequência de testes
+// _____________________________________
 
 initial
 begin
 
-    $display("================================");
-    $display("INICIO DOS TESTES");
-    $display("================================");
+    $display("_____________________________________");
+    $display("Iniciando os testes");
+    $display("_____________________________________");
 
     clk = 0;
     reset = 1;
@@ -104,9 +105,7 @@ begin
 
     reset = 0;
 
-    // ------------------------------
-    // TESTE PC
-    // ------------------------------
+    // Testando atualização do PC
 
     nextPC = 4;
     #10;
@@ -114,11 +113,9 @@ begin
     nextPC = 8;
     #10;
 
-    $display("PC Atual = %d", PC);
+    $display("Valor atual do PC = %d", PC);
 
-    // ------------------------------
-    // TESTE REGFILE
-    // ------------------------------
+    // Escrevendo um valor em R5 e lendo em seguida
 
     WriteAddr = 5;
     WriteData = 123;
@@ -132,11 +129,9 @@ begin
 
     #2;
 
-    $display("R5 = %d", ReadData1);
+    $display("Valor armazenado em R5 = %d", ReadData1);
 
-    // ------------------------------
-    // TESTE ULA
-    // ------------------------------
+    // Testes básicos da ULA
 
     In1 = 10;
     In2 = 5;
@@ -145,19 +140,19 @@ begin
 
     #2;
 
-    $display("ADD = %d", result);
+    $display("Resultado ADD = %d", result);
 
     OP = 4'b0001;
 
     #2;
 
-    $display("SUB = %d", result);
+    $display("Resultado SUB = %d", result);
 
     OP = 4'b0011;
 
     #2;
 
-    $display("OR = %d", result);
+    $display("Resultado OR = %d", result);
 
     OP = 4'b0110;
 
@@ -166,11 +161,11 @@ begin
 
     #2;
 
-    $display("SLT = %d", result);
+    $display("Resultado SLT = %d", result);
 
-    $display("================================");
-    $display("FIM DOS TESTES");
-    $display("================================");
+    $display("_____________________________________");
+    $display("Fim dos testes");
+    $display("_____________________________________");
 
     $finish;
 
