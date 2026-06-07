@@ -1,19 +1,23 @@
-// =====================================================
+// _____________________________________
 // Projeto MIPS Monociclo
 // Arquitetura e Organização de Computadores
 // UFRPE
 //
-// Módulos implementados:
+// Módulos implementados até o momento:
 // - PC
 // - RegFile
 // - ULA
-// =====================================================
+// _____________________________________
 
 
 
-// =====================================================
+// _____________________________________
 // PC (Program Counter)
-// =====================================================
+//
+// Guarda o endereço da instrução atual.
+// A cada borda de subida do clock o PC
+// recebe o valor presente em nextPC.
+// _____________________________________
 
 module pc(
     input clk,
@@ -34,9 +38,14 @@ endmodule
 
 
 
-// =====================================================
-// REGFILE
-// =====================================================
+// _____________________________________
+// Banco de Registradores (RegFile)
+//
+// Possui 32 registradores de 32 bits.
+// Leitura assíncrona.
+// Escrita síncrona.
+// O registrador R0 permanece sempre zero.
+// _____________________________________
 
 module regfile(
     input [4:0] ReadAddr1,
@@ -67,6 +76,7 @@ begin
             regs[i] <= 32'd0;
     end
 
+    // Impede escrita no registrador R0
     else if(RegWrite && (WriteAddr != 0))
     begin
         regs[WriteAddr] <= WriteData;
@@ -81,9 +91,12 @@ endmodule
 
 
 
-// =====================================================
+// _____________________________________
 // ULA
-// =====================================================
+//
+// Responsável pelas operações aritméticas
+// e lógicas utilizadas pelas instruções.
+// _____________________________________
 
 module ula(
     input [31:0] In1,
@@ -99,31 +112,39 @@ begin
 
     case(OP)
 
+        // Soma
         4'b0000:
-            result = In1 + In2; // ADD
+            result = In1 + In2;
 
+        // Subtração
         4'b0001:
-            result = In1 - In2; // SUB
+            result = In1 - In2;
 
+        // AND lógico
         4'b0010:
-            result = In1 & In2; // AND
+            result = In1 & In2;
 
+        // OR lógico
         4'b0011:
-            result = In1 | In2; // OR
+            result = In1 | In2;
 
+        // XOR lógico
         4'b0100:
-            result = In1 ^ In2; // XOR
+            result = In1 ^ In2;
 
+        // NOR lógico
         4'b0101:
-            result = ~(In1 | In2); // NOR
+            result = ~(In1 | In2);
 
+        // Comparação com sinal (SLT)
         4'b0110:
             result = ($signed(In1) < $signed(In2))
-                     ? 32'd1 : 32'd0; // SLT
+                     ? 32'd1 : 32'd0;
 
+        // Comparação sem sinal (SLTU)
         4'b0111:
             result = (In1 < In2)
-                     ? 32'd1 : 32'd0; // SLTU
+                     ? 32'd1 : 32'd0;
 
         default:
             result = 32'd0;
@@ -132,6 +153,7 @@ begin
 
 end
 
+// Flag usada em instruções como BEQ
 assign Zero_flag = (result == 0);
 
 endmodule
