@@ -2,21 +2,11 @@
 // Projeto MIPS Monociclo
 // Arquitetura e Organização de Computadores
 // UFRPE
-//
-// Módulos implementados até o momento:
-// - PC
-// - RegFile
-// - ULA
 // _____________________________________
 
 
-
 // _____________________________________
-// PC (Program Counter)
-//
-// Guarda o endereço da instrução atual.
-// A cada borda de subida do clock o PC
-// recebe o valor presente em nextPC.
+// PC
 // _____________________________________
 
 module pc(
@@ -37,14 +27,8 @@ end
 endmodule
 
 
-
 // _____________________________________
-// Banco de Registradores (RegFile)
-//
-// Possui 32 registradores de 32 bits.
-// Leitura assíncrona.
-// Escrita síncrona.
-// O registrador R0 permanece sempre zero.
+// Banco de Registradores
 // _____________________________________
 
 module regfile(
@@ -69,19 +53,15 @@ integer i;
 
 always @(posedge Clock)
 begin
-
     if(Reset)
     begin
         for(i = 0; i < 32; i = i + 1)
             regs[i] <= 32'd0;
     end
-
-    // Impede escrita no registrador R0
     else if(RegWrite && (WriteAddr != 0))
     begin
         regs[WriteAddr] <= WriteData;
     end
-
 end
 
 assign ReadData1 = regs[ReadAddr1];
@@ -90,12 +70,8 @@ assign ReadData2 = regs[ReadAddr2];
 endmodule
 
 
-
 // _____________________________________
 // ULA
-//
-// Responsável pelas operações aritméticas
-// e lógicas utilizadas pelas instruções.
 // _____________________________________
 
 module ula(
@@ -109,60 +85,45 @@ module ula(
 
 always @(*)
 begin
-
     case(OP)
 
-        // Soma
         4'b0000:
             result = In1 + In2;
 
-        // Subtração
         4'b0001:
             result = In1 - In2;
 
-        // AND lógico
         4'b0010:
             result = In1 & In2;
 
-        // OR lógico
         4'b0011:
             result = In1 | In2;
 
-        // XOR lógico
         4'b0100:
             result = In1 ^ In2;
 
-        // NOR lógico
         4'b0101:
             result = ~(In1 | In2);
 
-        // Comparação com sinal (SLT)
         4'b0110:
-            result = ($signed(In1) < $signed(In2))
-                     ? 32'd1 : 32'd0;
+            result = ($signed(In1) < $signed(In2)) ? 32'd1 : 32'd0;
 
-        // Comparação sem sinal (SLTU)
         4'b0111:
-            result = (In1 < In2)
-                     ? 32'd1 : 32'd0;
+            result = (In1 < In2) ? 32'd1 : 32'd0;
 
         default:
             result = 32'd0;
 
     endcase
-
 end
 
-// Flag usada em instruções como BEQ
 assign Zero_flag = (result == 0);
 
 endmodule
 
+
 // _____________________________________
 // Controle da ULA
-//
-// Traduz ALUOp + funct para o código
-// utilizado pela ULA.
 // _____________________________________
 
 module ula_ctrl(
@@ -174,7 +135,6 @@ module ula_ctrl(
 
 always @(*)
 begin
-
     case(ALUOp)
 
         // lw, sw, addi
@@ -185,10 +145,9 @@ begin
         2'b01:
             OP = 4'b0001;
 
-        // instruções tipo R
+        // tipo R
         2'b10:
         begin
-
             case(funct)
 
                 6'b100000: OP = 4'b0000; // add
@@ -204,23 +163,19 @@ begin
                     OP = 4'b0000;
 
             endcase
-
         end
 
         default:
             OP = 4'b0000;
 
     endcase
-
 end
 
 endmodule
 
+
 // _____________________________________
 // Unidade de Controle
-//
-// Recebe o opcode da instrução e gera
-// os sinais de controle do processador.
 // _____________________________________
 
 module ctrl(
@@ -239,8 +194,6 @@ module ctrl(
 
 always @(*)
 begin
-
-    // Valores padrão
     RegDst   = 0;
     ALUSrc   = 0;
     MemtoReg = 0;
@@ -258,6 +211,15 @@ begin
             RegDst   = 1;
             RegWrite = 1;
             ALUOp    = 2'b10;
+        end
+
+        // addi
+        6'b001000:
+        begin
+            RegDst   = 0;
+            ALUSrc   = 1;
+            RegWrite = 1;
+            ALUOp    = 2'b00;
         end
 
         // lw
@@ -287,20 +249,16 @@ begin
 
         default:
         begin
-            // Mantém valores padrão
         end
 
     endcase
-
 end
 
 endmodule
 
+
 // _____________________________________
 // Memória de instruções
-//
-// Armazena as instruções do programa.
-// O endereço vem do PC.
 // _____________________________________
 
 module i_mem(
@@ -310,27 +268,21 @@ module i_mem(
 
 reg [31:0] mem [0:255];
 
-// Algumas instruções de exemplo
 initial
 begin
-
-    mem[0] = 32'h012A4020; // add
-    mem[1] = 32'h014B4822; // sub
-    mem[2] = 32'h8D280000; // lw
-    mem[3] = 32'hAD280004; // sw
-
+    mem[0] = 32'h2009000A; // addi $t1, $zero, 10
+    mem[1] = 32'h200A0005; // addi $t2, $zero, 5
+    mem[2] = 32'h012A4020; // add  $t0, $t1, $t2
+    mem[3] = 32'h012A4822; // sub  $t1, $t1, $t2
 end
 
 assign instruction = mem[addr[31:2]];
 
 endmodule
 
+
 // _____________________________________
 // Memória de dados
-//
-// Utilizada pelas instruções lw e sw.
-// Escrita síncrona.
-// Leitura combinacional.
 // _____________________________________
 
 module d_mem(
@@ -351,55 +303,88 @@ integer i;
 
 initial
 begin
-
     for(i = 0; i < 256; i = i + 1)
         mem[i] = 32'd0;
-
 end
 
 always @(posedge clk)
 begin
-
     if(MemWrite)
         mem[addr[31:2]] <= write_data;
-
 end
 
 always @(*)
 begin
-
     if(MemRead)
         read_data = mem[addr[31:2]];
     else
         read_data = 32'd0;
-
 end
 
 endmodule
 
+
 // _____________________________________
 // Top Level do processador
-//
-// Conecta os principais módulos já
-// implementados no projeto.
 // _____________________________________
 
 module mips(
     input clk,
-    input reset
+    input reset,
+
+    output [31:0] debug_pc,
+    output [31:0] debug_instruction,
+    output [31:0] debug_alu_result
 );
 
 wire [31:0] PC;
 wire [31:0] nextPC;
-
 wire [31:0] instruction;
 
+wire [31:0] ReadData1;
+wire [31:0] ReadData2;
+
+wire [3:0] ALUControl;
+wire [31:0] ALUResult;
+wire Zero;
+
+wire [5:0] opcode;
+wire [4:0] rs;
+wire [4:0] rt;
+wire [4:0] rd;
+wire [5:0] funct;
+wire [15:0] imm;
+
+assign opcode = instruction[31:26];
+assign rs     = instruction[25:21];
+assign rt     = instruction[20:16];
+assign rd     = instruction[15:11];
+assign imm    = instruction[15:0];
+assign funct  = instruction[5:0];
+
+wire RegDst;
+wire ALUSrc;
+wire MemtoReg;
+wire RegWrite;
+wire MemRead;
+wire MemWrite;
+wire Branch;
+
+wire [1:0] ALUOp;
+
+wire [4:0] WriteAddr;
+wire [31:0] WriteData;
+
+wire [31:0] SignExtImm;
+wire [31:0] ALUIn2;
+
+assign SignExtImm = {{16{imm[15]}}, imm};
+assign ALUIn2 = (ALUSrc) ? SignExtImm : ReadData2;
+
+assign WriteAddr = (RegDst) ? rd : rt;
+assign WriteData = ALUResult;
+
 assign nextPC = PC + 4;
-
-
-// _____________________________________
-// PC
-// _____________________________________
 
 pc pc0(
     .clk(clk),
@@ -408,15 +393,58 @@ pc pc0(
     .PC(PC)
 );
 
-
-// _____________________________________
-// Memória de instruções
-// _____________________________________
-
 i_mem imem0(
     .addr(PC),
     .instruction(instruction)
 );
 
-endmodule
+ctrl ctrl0(
+    .opcode(opcode),
 
+    .RegDst(RegDst),
+    .ALUSrc(ALUSrc),
+    .MemtoReg(MemtoReg),
+    .RegWrite(RegWrite),
+    .MemRead(MemRead),
+    .MemWrite(MemWrite),
+    .Branch(Branch),
+
+    .ALUOp(ALUOp)
+);
+
+regfile regfile0(
+    .ReadAddr1(rs),
+    .ReadAddr2(rt),
+
+    .ReadData1(ReadData1),
+    .ReadData2(ReadData2),
+
+    .Clock(clk),
+    .Reset(reset),
+
+    .WriteAddr(WriteAddr),
+    .WriteData(WriteData),
+
+    .RegWrite(RegWrite)
+);
+
+ula_ctrl alu_ctrl0(
+    .ALUOp(ALUOp),
+    .funct(funct),
+    .OP(ALUControl)
+);
+
+ula ula0(
+    .In1(ReadData1),
+    .In2(ALUIn2),
+    .OP(ALUControl),
+
+    .result(ALUResult),
+    .Zero_flag(Zero)
+);
+
+assign debug_pc = PC;
+assign debug_instruction = instruction;
+assign debug_alu_result = ALUResult;
+
+endmodule
