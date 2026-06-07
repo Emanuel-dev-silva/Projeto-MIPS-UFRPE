@@ -131,6 +131,24 @@ regfile regfile_test(
 
 
 // _____________________________________
+// Teste do MIPS integrado
+// _____________________________________
+
+wire [31:0] debug_pc;
+wire [31:0] debug_instruction;
+wire [31:0] debug_alu_result;
+
+mips mips_test(
+    .clk(clk),
+    .reset(reset),
+
+    .debug_pc(debug_pc),
+    .debug_instruction(debug_instruction),
+    .debug_alu_result(debug_alu_result)
+);
+
+
+// _____________________________________
 // Geração do clock
 // _____________________________________
 
@@ -296,6 +314,36 @@ begin
     #2;
 
     $display("I_MEM[3] = %h", instruction);
+
+    // Teste do MIPS integrado
+
+    $display("_____________________________________");
+    $display("Teste do MIPS integrado");
+    $display("_____________________________________");
+
+    reset = 1;
+    #10;
+
+    reset = 0;
+    #1;
+
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d",
+             debug_pc, debug_instruction, debug_alu_result);
+
+    #10;
+
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d",
+             debug_pc, debug_instruction, debug_alu_result);
+
+    #10;
+
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d",
+             debug_pc, debug_instruction, debug_alu_result);
+
+    #10;
+
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d",
+             debug_pc, debug_instruction, debug_alu_result);
 
     $display("_____________________________________");
     $display("Fim dos testes");
