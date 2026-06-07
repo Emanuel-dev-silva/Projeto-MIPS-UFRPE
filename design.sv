@@ -393,7 +393,8 @@ module mips(
 
     output [31:0] debug_pc,
     output [31:0] debug_instruction,
-    output [31:0] debug_alu_result
+    output [31:0] debug_alu_result,
+    output [31:0] debug_mem_data
 );
 
 wire [31:0] PC;
@@ -563,5 +564,6 @@ d_mem dmem0(
 assign debug_pc = PC;
 assign debug_instruction = instruction;
 assign debug_alu_result = ALUResult;
+assign debug_mem_data = MemReadData;
 
 endmodule
