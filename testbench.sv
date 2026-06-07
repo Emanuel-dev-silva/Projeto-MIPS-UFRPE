@@ -137,6 +137,7 @@ regfile regfile_test(
 wire [31:0] debug_pc;
 wire [31:0] debug_instruction;
 wire [31:0] debug_alu_result;
+wire [31:0] debug_mem_data;
 
 mips mips_test(
     .clk(clk),
@@ -144,7 +145,8 @@ mips mips_test(
 
     .debug_pc(debug_pc),
     .debug_instruction(debug_instruction),
-    .debug_alu_result(debug_alu_result)
+    .debug_alu_result(debug_alu_result),
+    .debug_mem_data(debug_mem_data)
 );
 
 
@@ -315,6 +317,16 @@ begin
 
     $display("I_MEM[3] = %h", instruction);
 
+    instruction_addr = 16;
+    #2;
+
+    $display("I_MEM[4] = %h", instruction);
+
+    instruction_addr = 20;
+    #2;
+
+    $display("I_MEM[5] = %h", instruction);
+
     // Teste do MIPS integrado
 
     $display("_____________________________________");
@@ -327,23 +339,33 @@ begin
     reset = 0;
     #1;
 
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d",
-             debug_pc, debug_instruction, debug_alu_result);
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
     #10;
 
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d",
-             debug_pc, debug_instruction, debug_alu_result);
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
     #10;
 
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d",
-             debug_pc, debug_instruction, debug_alu_result);
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
     #10;
 
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d",
-             debug_pc, debug_instruction, debug_alu_result);
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
     $display("_____________________________________");
     $display("Fim dos testes");
