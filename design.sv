@@ -157,3 +157,266 @@ end
 assign Zero_flag = (result == 0);
 
 endmodule
+
+// _____________________________________
+// Controle da ULA
+//
+// Traduz ALUOp + funct para o código
+// utilizado pela ULA.
+// _____________________________________
+
+module ula_ctrl(
+    input [1:0] ALUOp,
+    input [5:0] funct,
+
+    output reg [3:0] OP
+);
+
+always @(*)
+begin
+
+    case(ALUOp)
+
+        // lw, sw, addi
+        2'b00:
+            OP = 4'b0000;
+
+        // beq
+        2'b01:
+            OP = 4'b0001;
+
+        // instruções tipo R
+        2'b10:
+        begin
+
+            case(funct)
+
+                6'b100000: OP = 4'b0000; // add
+                6'b100010: OP = 4'b0001; // sub
+                6'b100100: OP = 4'b0010; // and
+                6'b100101: OP = 4'b0011; // or
+                6'b100110: OP = 4'b0100; // xor
+                6'b100111: OP = 4'b0101; // nor
+                6'b101010: OP = 4'b0110; // slt
+                6'b101011: OP = 4'b0111; // sltu
+
+                default:
+                    OP = 4'b0000;
+
+            endcase
+
+        end
+
+        default:
+            OP = 4'b0000;
+
+    endcase
+
+end
+
+endmodule
+
+// _____________________________________
+// Unidade de Controle
+//
+// Recebe o opcode da instrução e gera
+// os sinais de controle do processador.
+// _____________________________________
+
+module ctrl(
+    input [5:0] opcode,
+
+    output reg RegDst,
+    output reg ALUSrc,
+    output reg MemtoReg,
+    output reg RegWrite,
+    output reg MemRead,
+    output reg MemWrite,
+    output reg Branch,
+
+    output reg [1:0] ALUOp
+);
+
+always @(*)
+begin
+
+    // Valores padrão
+    RegDst   = 0;
+    ALUSrc   = 0;
+    MemtoReg = 0;
+    RegWrite = 0;
+    MemRead  = 0;
+    MemWrite = 0;
+    Branch   = 0;
+    ALUOp    = 2'b00;
+
+    case(opcode)
+
+        // R-Type
+        6'b000000:
+        begin
+            RegDst   = 1;
+            RegWrite = 1;
+            ALUOp    = 2'b10;
+        end
+
+        // lw
+        6'b100011:
+        begin
+            ALUSrc   = 1;
+            MemtoReg = 1;
+            RegWrite = 1;
+            MemRead  = 1;
+            ALUOp    = 2'b00;
+        end
+
+        // sw
+        6'b101011:
+        begin
+            ALUSrc   = 1;
+            MemWrite = 1;
+            ALUOp    = 2'b00;
+        end
+
+        // beq
+        6'b000100:
+        begin
+            Branch = 1;
+            ALUOp  = 2'b01;
+        end
+
+        default:
+        begin
+            // Mantém valores padrão
+        end
+
+    endcase
+
+end
+
+endmodule
+
+// _____________________________________
+// Memória de instruções
+//
+// Armazena as instruções do programa.
+// O endereço vem do PC.
+// _____________________________________
+
+module i_mem(
+    input [31:0] addr,
+    output [31:0] instruction
+);
+
+reg [31:0] mem [0:255];
+
+// Algumas instruções de exemplo
+initial
+begin
+
+    mem[0] = 32'h012A4020; // add
+    mem[1] = 32'h014B4822; // sub
+    mem[2] = 32'h8D280000; // lw
+    mem[3] = 32'hAD280004; // sw
+
+end
+
+assign instruction = mem[addr[31:2]];
+
+endmodule
+
+// _____________________________________
+// Memória de dados
+//
+// Utilizada pelas instruções lw e sw.
+// Escrita síncrona.
+// Leitura combinacional.
+// _____________________________________
+
+module d_mem(
+    input clk,
+
+    input MemRead,
+    input MemWrite,
+
+    input [31:0] addr,
+    input [31:0] write_data,
+
+    output reg [31:0] read_data
+);
+
+reg [31:0] mem [0:255];
+
+integer i;
+
+initial
+begin
+
+    for(i = 0; i < 256; i = i + 1)
+        mem[i] = 32'd0;
+
+end
+
+always @(posedge clk)
+begin
+
+    if(MemWrite)
+        mem[addr[31:2]] <= write_data;
+
+end
+
+always @(*)
+begin
+
+    if(MemRead)
+        read_data = mem[addr[31:2]];
+    else
+        read_data = 32'd0;
+
+end
+
+endmodule
+
+// _____________________________________
+// Top Level do processador
+//
+// Conecta os principais módulos já
+// implementados no projeto.
+// _____________________________________
+
+module mips(
+    input clk,
+    input reset
+);
+
+wire [31:0] PC;
+wire [31:0] nextPC;
+
+wire [31:0] instruction;
+
+assign nextPC = PC + 4;
+
+
+// _____________________________________
+// PC
+// _____________________________________
+
+pc pc0(
+    .clk(clk),
+    .reset(reset),
+    .nextPC(nextPC),
+    .PC(PC)
+);
+
+
+// _____________________________________
+// Memória de instruções
+// _____________________________________
+
+i_mem imem0(
+    .addr(PC),
+    .instruction(instruction)
+);
+
+endmodule
+
