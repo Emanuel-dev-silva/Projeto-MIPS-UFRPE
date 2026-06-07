@@ -10,7 +10,7 @@ Semestre: 2026.1
 
 - Andrey Israel
 - Emanuel Barbosa
-- Erick
+- Érick Matheus
 - João Matheus
 
 ## Módulos implementados até agora
