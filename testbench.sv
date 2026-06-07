@@ -40,6 +40,66 @@ ula ula_test(
 
 
 // _____________________________________
+// Teste da ULA Control
+// _____________________________________
+
+reg [1:0] ALUOp;
+reg [5:0] funct;
+
+wire [3:0] ALUControlOut;
+
+ula_ctrl ula_ctrl_test(
+    .ALUOp(ALUOp),
+    .funct(funct),
+    .OP(ALUControlOut)
+);
+
+
+// _____________________________________
+// Teste da Unidade de Controle
+// _____________________________________
+
+reg [5:0] opcode;
+
+wire RegDst;
+wire ALUSrc;
+wire MemtoReg;
+wire RegWrite_ctrl;
+wire MemRead;
+wire MemWrite;
+wire Branch;
+
+wire [1:0] ALUOp_ctrl;
+
+ctrl ctrl_test(
+    .opcode(opcode),
+
+    .RegDst(RegDst),
+    .ALUSrc(ALUSrc),
+    .MemtoReg(MemtoReg),
+    .RegWrite(RegWrite_ctrl),
+    .MemRead(MemRead),
+    .MemWrite(MemWrite),
+    .Branch(Branch),
+
+    .ALUOp(ALUOp_ctrl)
+);
+
+
+// _____________________________________
+// Teste da memória de instruções
+// _____________________________________
+
+reg [31:0] instruction_addr;
+wire [31:0] instruction;
+
+i_mem i_mem_test(
+    .addr(instruction_addr),
+    .instruction(instruction)
+);
+
+
+// _____________________________________
 // Teste do banco de registradores
 // _____________________________________
 
@@ -72,7 +132,6 @@ regfile regfile_test(
 
 // _____________________________________
 // Geração do clock
-// Troca de estado a cada 5 unidades
 // _____________________________________
 
 always #5 clk = ~clk;
@@ -101,6 +160,8 @@ begin
     ReadAddr1 = 0;
     ReadAddr2 = 0;
 
+    instruction_addr = 0;
+
     #10;
 
     reset = 0;
@@ -115,7 +176,7 @@ begin
 
     $display("Valor atual do PC = %d", PC);
 
-    // Escrevendo um valor em R5 e lendo em seguida
+    // Escrevendo em R5 e lendo em seguida
 
     WriteAddr = 5;
     WriteData = 123;
@@ -162,6 +223,79 @@ begin
     #2;
 
     $display("Resultado SLT = %d", result);
+
+    // Testes da ULA Control
+
+    ALUOp = 2'b10;
+    funct = 6'b100000;
+
+    #2;
+
+    $display("ULA_CTRL ADD = %b", ALUControlOut);
+
+    funct = 6'b100010;
+
+    #2;
+
+    $display("ULA_CTRL SUB = %b", ALUControlOut);
+
+    funct = 6'b100100;
+
+    #2;
+
+    $display("ULA_CTRL AND = %b", ALUControlOut);
+
+    // Testes da Unidade de Controle
+
+    opcode = 6'b000000;
+
+    #2;
+
+    $display("CTRL R_TYPE -> RegDst=%b RegWrite=%b ALUOp=%b",
+             RegDst, RegWrite_ctrl, ALUOp_ctrl);
+
+    opcode = 6'b100011;
+
+    #2;
+
+    $display("CTRL LW -> MemRead=%b MemtoReg=%b RegWrite=%b",
+             MemRead, MemtoReg, RegWrite_ctrl);
+
+    opcode = 6'b101011;
+
+    #2;
+
+    $display("CTRL SW -> MemWrite=%b",
+             MemWrite);
+
+    opcode = 6'b000100;
+
+    #2;
+
+    $display("CTRL BEQ -> Branch=%b ALUOp=%b",
+             Branch, ALUOp_ctrl);
+
+    // Testes da memória de instruções
+
+    instruction_addr = 0;
+    #2;
+
+    $display("I_MEM[0] = %h", instruction);
+
+    instruction_addr = 4;
+    #2;
+
+    $display("I_MEM[1] = %h", instruction);
+
+    instruction_addr = 8;
+    #2;
+
+    $display("I_MEM[2] = %h", instruction);
+
+    instruction_addr = 12;
+    #2;
+
+    $display("I_MEM[3] = %h", instruction);
 
     $display("_____________________________________");
     $display("Fim dos testes");
