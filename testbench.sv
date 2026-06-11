@@ -25,6 +25,7 @@ pc pc_test(
 
 reg [31:0] In1;
 reg [31:0] In2;
+reg [4:0] shamt;
 reg [3:0] OP;
 
 wire [31:0] result;
@@ -33,6 +34,7 @@ wire Zero_flag;
 ula ula_test(
     .In1(In1),
     .In2(In2),
+    .shamt(shamt),
     .OP(OP),
     .result(result),
     .Zero_flag(Zero_flag)
@@ -68,6 +70,15 @@ wire RegWrite_ctrl;
 wire MemRead;
 wire MemWrite;
 wire Branch;
+wire BranchNE;
+wire Jump;
+wire Jal;
+
+wire ZeroExtend;
+wire Lui;
+
+wire ALUCtrlSrc;
+wire [3:0] ALUControlDirect;
 
 wire [1:0] ALUOp_ctrl;
 
@@ -81,6 +92,15 @@ ctrl ctrl_test(
     .MemRead(MemRead),
     .MemWrite(MemWrite),
     .Branch(Branch),
+    .BranchNE(BranchNE),
+    .Jump(Jump),
+    .Jal(Jal),
+
+    .ZeroExtend(ZeroExtend),
+    .Lui(Lui),
+
+    .ALUCtrlSrc(ALUCtrlSrc),
+    .ALUControlDirect(ALUControlDirect),
 
     .ALUOp(ALUOp_ctrl)
 );
@@ -182,6 +202,11 @@ begin
 
     instruction_addr = 0;
 
+    In1 = 0;
+    In2 = 0;
+    shamt = 0;
+    OP = 0;
+
     #10;
 
     reset = 0;
@@ -216,116 +241,192 @@ begin
 
     In1 = 10;
     In2 = 5;
+    shamt = 0;
 
     OP = 4'b0000;
-
     #2;
-
     $display("Resultado ADD = %d", result);
 
     OP = 4'b0001;
-
     #2;
-
     $display("Resultado SUB = %d", result);
 
     OP = 4'b0011;
-
     #2;
-
     $display("Resultado OR = %d", result);
 
     OP = 4'b0110;
-
     In1 = 3;
     In2 = 10;
-
     #2;
-
     $display("Resultado SLT = %d", result);
+
+    // Testes de deslocamento da ULA
+
+    In1 = 2;
+    In2 = 4;
+    shamt = 1;
+
+    OP = 4'b1000;
+    #2;
+    $display("Resultado SLL = %d", result);
+
+    OP = 4'b1001;
+    In2 = 8;
+    shamt = 1;
+    #2;
+    $display("Resultado SRL = %d", result);
+
+    OP = 4'b1010;
+    In2 = 32'hFFFFFFF8;
+    shamt = 1;
+    #2;
+    $display("Resultado SRA = %h", result);
+
+    OP = 4'b1011;
+    In1 = 2;
+    In2 = 3;
+    #2;
+    $display("Resultado SLLV = %d", result);
+
+    OP = 4'b1100;
+    In1 = 1;
+    In2 = 8;
+    #2;
+    $display("Resultado SRLV = %d", result);
+
+    OP = 4'b1101;
+    In1 = 1;
+    In2 = 32'hFFFFFFF8;
+    #2;
+    $display("Resultado SRAV = %h", result);
 
     // Testes da ULA Control
 
     ALUOp = 2'b10;
     funct = 6'b100000;
-
     #2;
-
     $display("ULA_CTRL ADD = %b", ALUControlOut);
 
     funct = 6'b100010;
-
     #2;
-
     $display("ULA_CTRL SUB = %b", ALUControlOut);
 
     funct = 6'b100100;
-
     #2;
-
     $display("ULA_CTRL AND = %b", ALUControlOut);
+
+    funct = 6'b000000;
+    #2;
+    $display("ULA_CTRL SLL = %b", ALUControlOut);
+
+    funct = 6'b000010;
+    #2;
+    $display("ULA_CTRL SRL = %b", ALUControlOut);
+
+    funct = 6'b000011;
+    #2;
+    $display("ULA_CTRL SRA = %b", ALUControlOut);
+
+    funct = 6'b000100;
+    #2;
+    $display("ULA_CTRL SLLV = %b", ALUControlOut);
+
+    funct = 6'b000110;
+    #2;
+    $display("ULA_CTRL SRLV = %b", ALUControlOut);
+
+    funct = 6'b000111;
+    #2;
+    $display("ULA_CTRL SRAV = %b", ALUControlOut);
 
     // Testes da Unidade de Controle
 
     opcode = 6'b000000;
-
     #2;
 
     $display("CTRL R_TYPE -> RegDst=%b RegWrite=%b ALUOp=%b",
              RegDst, RegWrite_ctrl, ALUOp_ctrl);
 
     opcode = 6'b100011;
-
     #2;
 
     $display("CTRL LW -> MemRead=%b MemtoReg=%b RegWrite=%b",
              MemRead, MemtoReg, RegWrite_ctrl);
 
     opcode = 6'b101011;
-
     #2;
 
     $display("CTRL SW -> MemWrite=%b",
              MemWrite);
 
     opcode = 6'b000100;
-
     #2;
 
-    $display("CTRL BEQ -> Branch=%b ALUOp=%b",
-             Branch, ALUOp_ctrl);
+    $display("CTRL BEQ -> Branch=%b BranchNE=%b ALUControlDirect=%b",
+             Branch, BranchNE, ALUControlDirect);
+
+    opcode = 6'b000101;
+    #2;
+
+    $display("CTRL BNE -> Branch=%b BranchNE=%b ALUControlDirect=%b",
+             Branch, BranchNE, ALUControlDirect);
+
+    opcode = 6'b000010;
+    #2;
+
+    $display("CTRL J -> Jump=%b Jal=%b",
+             Jump, Jal);
+
+    opcode = 6'b000011;
+    #2;
+
+    $display("CTRL JAL -> Jump=%b Jal=%b RegWrite=%b",
+             Jump, Jal, RegWrite_ctrl);
+
+    opcode = 6'b001111;
+    #2;
+
+    $display("CTRL LUI -> Lui=%b RegWrite=%b",
+             Lui, RegWrite_ctrl);
 
     // Testes da memória de instruções
 
     instruction_addr = 0;
     #2;
-
     $display("I_MEM[0] = %h", instruction);
 
     instruction_addr = 4;
     #2;
-
     $display("I_MEM[1] = %h", instruction);
 
     instruction_addr = 8;
     #2;
-
     $display("I_MEM[2] = %h", instruction);
 
     instruction_addr = 12;
     #2;
-
     $display("I_MEM[3] = %h", instruction);
 
     instruction_addr = 16;
     #2;
-
     $display("I_MEM[4] = %h", instruction);
 
     instruction_addr = 20;
     #2;
-
     $display("I_MEM[5] = %h", instruction);
+
+    instruction_addr = 52;
+    #2;
+    $display("I_MEM[13] = %h", instruction);
+
+    instruction_addr = 64;
+    #2;
+    $display("I_MEM[16] = %h", instruction);
+
+    instruction_addr = 68;
+    #2;
+    $display("I_MEM[17] = %h", instruction);
 
     // Teste do MIPS integrado
 
@@ -343,27 +444,62 @@ begin
              debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
     #10;
-
     $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
              debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
     #10;
-
     $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
              debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
     #10;
-
     $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
              debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
     #10;
-
     $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
              debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
     #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
+    #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
+    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
+             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+
+    #10;
     $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
              debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
 
