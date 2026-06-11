@@ -9,7 +9,7 @@
 // Grupo:
 // - Andrey Israel
 // - Emanuel Barbosa
-// - Erick
+// - Erick Matheus
 // - João Matheus
 //
 // Arquivo: i_mem.sv
