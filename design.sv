@@ -225,6 +225,7 @@ module ctrl(
     output reg MemRead,
     output reg MemWrite,
     output reg Branch,
+    output reg Jump,
 
     output reg [1:0] ALUOp
 );
@@ -240,6 +241,7 @@ begin
     MemRead  = 0;
     MemWrite = 0;
     Branch   = 0;
+    Jump     = 0;
     ALUOp    = 2'b00;
 
     case(opcode)
@@ -287,6 +289,12 @@ begin
             ALUOp  = 2'b01;
         end
 
+        // j altera diretamente o PC.
+        6'b000010:
+        begin
+            Jump = 1;
+        end
+
         default:
         begin
             // Se não reconhecer a instrução, não faz nada.
@@ -296,7 +304,6 @@ begin
 end
 
 endmodule
-
 
 // _____________________________________
 // Memória de Instruções
@@ -314,13 +321,26 @@ reg [31:0] mem [0:255];
 
 initial
 begin
+
+    // Coloca 10 em $t1
     mem[0] = 32'h2009000A; // addi $t1, $zero, 10
-    mem[1] = 32'h200A000A; // addi $t2, $zero, 10
-    mem[2] = 32'h112A0001; // beq  $t1, $t2, 1  -> se forem iguais, pula a próxima
-    mem[3] = 32'h20080063; // addi $t0, $zero, 99 -> essa deve ser pulada
-    mem[4] = 32'h012A4020; // add  $t0, $t1, $t2 -> 10 + 10 = 20
-    mem[5] = 32'hAC080000; // sw   $t0, 0($zero)
-    mem[6] = 32'h8C0B0000; // lw   $t3, 0($zero)
+
+    // Faz um salto para a instrução de índice 4
+    mem[1] = 32'h08000004; // j 4
+
+    // Essas instruções devem ser puladas pelo jump
+    mem[2] = 32'h20080063; // addi $t0, $zero, 99
+    mem[3] = 32'h200A0064; // addi $t2, $zero, 100
+
+    // Destino do jump
+    mem[4] = 32'h200B0014; // addi $t3, $zero, 20
+
+    // Guarda o valor 20 na memória
+    mem[5] = 32'hAC0B0000; // sw $t3, 0($zero)
+
+    // Lê o valor da memória
+    mem[6] = 32'h8C0C0000; // lw $t4, 0($zero)
+
 end
 
 assign instruction = mem[addr[31:2]];
@@ -421,13 +441,15 @@ wire [4:0] rt;
 wire [4:0] rd;
 wire [5:0] funct;
 wire [15:0] imm;
+wire [25:0] jump_addr;
 
-assign opcode = instruction[31:26];
-assign rs     = instruction[25:21];
-assign rt     = instruction[20:16];
-assign rd     = instruction[15:11];
-assign imm    = instruction[15:0];
-assign funct  = instruction[5:0];
+assign opcode    = instruction[31:26];
+assign rs        = instruction[25:21];
+assign rt        = instruction[20:16];
+assign rd        = instruction[15:11];
+assign imm       = instruction[15:0];
+assign funct     = instruction[5:0];
+assign jump_addr = instruction[25:0];
 
 
 // _____________________________________
@@ -441,6 +463,7 @@ wire RegWrite;
 wire MemRead;
 wire MemWrite;
 wire Branch;
+wire Jump;
 
 wire [1:0] ALUOp;
 
@@ -457,6 +480,8 @@ wire [31:0] ALUIn2;
 
 wire [31:0] PCPlus4;
 wire [31:0] BranchAddr;
+wire [31:0] JumpAddr;
+wire [31:0] PCAfterBranch;
 wire BranchTaken;
 
 // Estende o imediato de 16 para 32 bits.
@@ -477,12 +502,18 @@ assign PCPlus4 = PC + 4;
 // Para beq, o imediato é multiplicado por 4 usando shift left 2.
 assign BranchAddr = PCPlus4 + (SignExtImm << 2);
 
+// Para j, monta o endereço usando os 4 bits mais altos do PC+4,
+// os 26 bits da instrução e dois zeros no final.
+assign JumpAddr = {PCPlus4[31:28], jump_addr, 2'b00};
+
 // O branch só acontece se Branch=1 e a ULA disser que deu zero.
 assign BranchTaken = Branch & Zero;
 
-// Se o beq for verdadeiro, vai para BranchAddr.
-// Caso contrário, segue para PC + 4.
-assign nextPC = (BranchTaken) ? BranchAddr : PCPlus4;
+// Primeiro escolhe entre PC+4 e branch.
+assign PCAfterBranch = (BranchTaken) ? BranchAddr : PCPlus4;
+
+// Depois escolhe entre o resultado anterior e o jump.
+assign nextPC = (Jump) ? JumpAddr : PCAfterBranch;
 
 
 // _____________________________________
@@ -511,6 +542,7 @@ ctrl ctrl0(
     .MemRead(MemRead),
     .MemWrite(MemWrite),
     .Branch(Branch),
+    .Jump(Jump),
 
     .ALUOp(ALUOp)
 );
