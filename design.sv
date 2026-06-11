@@ -89,13 +89,15 @@ endmodule
 // _____________________________________
 // ULA
 //
-// A ULA faz as contas e operações lógicas.
+// A ULA faz as contas, operações lógicas,
+// comparações e deslocamentos.
 // O código OP diz qual operação ela deve fazer.
 // _____________________________________
 
 module ula(
     input [31:0] In1,
     input [31:0] In2,
+    input [4:0] shamt,
     input [3:0] OP,
 
     output reg [31:0] result,
@@ -138,14 +140,36 @@ begin
         4'b0111:
             result = (In1 < In2) ? 32'd1 : 32'd0;
 
+        // SLL
+        4'b1000:
+            result = In2 << shamt;
+
+        // SRL
+        4'b1001:
+            result = In2 >> shamt;
+
+        // SRA
+        4'b1010:
+            result = $signed(In2) >>> shamt;
+
+        // SLLV
+        4'b1011:
+            result = In2 << In1[4:0];
+
+        // SRLV
+        4'b1100:
+            result = In2 >> In1[4:0];
+
+        // SRAV
+        4'b1101:
+            result = $signed(In2) >>> In1[4:0];
+
         default:
             result = 32'd0;
 
     endcase
 end
 
-// Essa flag fica 1 quando o resultado da ULA é zero.
-// Ela vai ser útil para instruções tipo beq.
 assign Zero_flag = (result == 0);
 
 endmodule
@@ -170,15 +194,15 @@ always @(*)
 begin
     case(ALUOp)
 
-        // Para lw, sw e addi a ULA faz soma.
+        // Soma para lw, sw, addi etc.
         2'b00:
             OP = 4'b0000;
 
-        // Para beq a ULA faz subtração.
+        // Subtração para beq e bne.
         2'b01:
             OP = 4'b0001;
 
-        // Para instruções tipo R, o funct decide.
+        // Tipo R usa o funct.
         2'b10:
         begin
             case(funct)
@@ -191,6 +215,14 @@ begin
                 6'b100111: OP = 4'b0101; // nor
                 6'b101010: OP = 4'b0110; // slt
                 6'b101011: OP = 4'b0111; // sltu
+
+                6'b000000: OP = 4'b1000; // sll
+                6'b000010: OP = 4'b1001; // srl
+                6'b000011: OP = 4'b1010; // sra
+
+                6'b000100: OP = 4'b1011; // sllv
+                6'b000110: OP = 4'b1100; // srlv
+                6'b000111: OP = 4'b1101; // srav
 
                 default:
                     OP = 4'b0000;
@@ -210,9 +242,8 @@ endmodule
 // _____________________________________
 // Unidade de Controle
 //
-// Esse é o módulo que olha o opcode da instrução
-// e liga/desliga os sinais do processador.
-// Ele basicamente diz o caminho que a instrução vai seguir.
+// Esse módulo olha o opcode da instrução
+// e gera os sinais de controle do processador.
 // _____________________________________
 
 module ctrl(
@@ -225,79 +256,176 @@ module ctrl(
     output reg MemRead,
     output reg MemWrite,
     output reg Branch,
+    output reg BranchNE,
     output reg Jump,
+    output reg Jal,
+
+    output reg ZeroExtend,
+    output reg Lui,
+
+    output reg ALUCtrlSrc,
+    output reg [3:0] ALUControlDirect,
 
     output reg [1:0] ALUOp
 );
 
 always @(*)
 begin
-    // Primeiro tudo começa desligado.
-    // Depois cada instrução liga só o que precisa.
-    RegDst   = 0;
-    ALUSrc   = 0;
-    MemtoReg = 0;
-    RegWrite = 0;
-    MemRead  = 0;
-    MemWrite = 0;
-    Branch   = 0;
-    Jump     = 0;
-    ALUOp    = 2'b00;
+    // Valores padrão
+    RegDst           = 0;
+    ALUSrc           = 0;
+    MemtoReg         = 0;
+    RegWrite         = 0;
+    MemRead          = 0;
+    MemWrite         = 0;
+    Branch           = 0;
+    BranchNE         = 0;
+    Jump             = 0;
+    Jal              = 0;
+    ZeroExtend       = 0;
+    Lui              = 0;
+    ALUCtrlSrc       = 0;
+    ALUControlDirect = 4'b0000;
+    ALUOp            = 2'b00;
 
     case(opcode)
 
-        // Instruções tipo R
+        // Tipo R
         6'b000000:
         begin
-            RegDst   = 1;
-            RegWrite = 1;
-            ALUOp    = 2'b10;
+            RegDst     = 1;
+            RegWrite   = 1;
+            ALUOp      = 2'b10;
+            ALUCtrlSrc = 0;
         end
 
-        // addi usa imediato e escreve no registrador rt.
+        // addi
         6'b001000:
         begin
-            RegDst   = 0;
-            ALUSrc   = 1;
-            RegWrite = 1;
-            ALUOp    = 2'b00;
+            RegDst           = 0;
+            ALUSrc           = 1;
+            RegWrite         = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0000; // add
         end
 
-        // lw calcula endereço, lê da memória e escreve no registrador.
+        // andi
+        6'b001100:
+        begin
+            RegDst           = 0;
+            ALUSrc           = 1;
+            RegWrite         = 1;
+            ZeroExtend       = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0010; // and
+        end
+
+        // ori
+        6'b001101:
+        begin
+            RegDst           = 0;
+            ALUSrc           = 1;
+            RegWrite         = 1;
+            ZeroExtend       = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0011; // or
+        end
+
+        // xori
+        6'b001110:
+        begin
+            RegDst           = 0;
+            ALUSrc           = 1;
+            RegWrite         = 1;
+            ZeroExtend       = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0100; // xor
+        end
+
+        // slti
+        6'b001010:
+        begin
+            RegDst           = 0;
+            ALUSrc           = 1;
+            RegWrite         = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0110; // slt
+        end
+
+        // sltiu
+        6'b001011:
+        begin
+            RegDst           = 0;
+            ALUSrc           = 1;
+            RegWrite         = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0111; // sltu
+        end
+
+        // lui
+        6'b001111:
+        begin
+            RegDst     = 0;
+            RegWrite   = 1;
+            Lui        = 1;
+            ALUCtrlSrc = 1;
+        end
+
+        // lw
         6'b100011:
         begin
-            RegDst   = 0;
-            ALUSrc   = 1;
-            MemtoReg = 1;
-            RegWrite = 1;
-            MemRead  = 1;
-            ALUOp    = 2'b00;
+            RegDst           = 0;
+            ALUSrc           = 1;
+            MemtoReg         = 1;
+            RegWrite         = 1;
+            MemRead          = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0000; // add
         end
 
-        // sw calcula endereço e escreve na memória.
+        // sw
         6'b101011:
         begin
-            ALUSrc   = 1;
-            MemWrite = 1;
-            ALUOp    = 2'b00;
+            ALUSrc           = 1;
+            MemWrite         = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0000; // add
         end
 
-        // beq compara dois registradores.
+        // beq
         6'b000100:
         begin
-            Branch = 1;
-            ALUOp  = 2'b01;
+            Branch           = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0001; // sub
         end
 
-        // j altera diretamente o PC.
+        // bne
+        6'b000101:
+        begin
+            BranchNE         = 1;
+            ALUCtrlSrc       = 1;
+            ALUControlDirect = 4'b0001; // sub
+        end
+
+        // j
         6'b000010:
         begin
             Jump = 1;
         end
 
+        // jal
+        // Salva PC + 8 no registrador $31 e faz jump.
+        6'b000011:
+        begin
+            Jump     = 1;
+            Jal      = 1;
+            RegWrite = 1;
+        end
+
         default:
         begin
-            // Se não reconhecer a instrução, não faz nada.
+            // Instrução desconhecida: não faz nada.
         end
 
     endcase
@@ -305,11 +433,15 @@ end
 
 endmodule
 
+
 // _____________________________________
 // Memória de Instruções
 //
-// Aqui fica o "programa" que o processador vai executar.
-// Agora coloquei um beq para testar se o PC pula uma instrução.
+// A memória de instruções guarda o programa
+// que será executado pelo processador.
+//
+// As instruções são carregadas de um arquivo externo
+// chamado instruction.list, como pedido no projeto.
 // _____________________________________
 
 module i_mem(
@@ -319,28 +451,17 @@ module i_mem(
 
 reg [31:0] mem [0:255];
 
+integer i;
+
 initial
 begin
+    // Preenche tudo com NOP para evitar xxxxxxxx
+    // caso o PC passe do final do programa.
+    for(i = 0; i < 256; i = i + 1)
+        mem[i] = 32'h00000020;
 
-    // Coloca 10 em $t1
-    mem[0] = 32'h2009000A; // addi $t1, $zero, 10
-
-    // Faz um salto para a instrução de índice 4
-    mem[1] = 32'h08000004; // j 4
-
-    // Essas instruções devem ser puladas pelo jump
-    mem[2] = 32'h20080063; // addi $t0, $zero, 99
-    mem[3] = 32'h200A0064; // addi $t2, $zero, 100
-
-    // Destino do jump
-    mem[4] = 32'h200B0014; // addi $t3, $zero, 20
-
-    // Guarda o valor 20 na memória
-    mem[5] = 32'hAC0B0000; // sw $t3, 0($zero)
-
-    // Lê o valor da memória
-    mem[6] = 32'h8C0C0000; // lw $t4, 0($zero)
-
+    // Carrega as instruções do arquivo externo.
+$readmemh("instruction.list", mem, 0, 18);
 end
 
 assign instruction = mem[addr[31:2]];
@@ -365,7 +486,7 @@ module d_mem(
     input [31:0] addr,
     input [31:0] write_data,
 
-    output reg [31:0] read_data
+    output [31:0] read_data
 );
 
 reg [31:0] mem [0:255];
@@ -378,21 +499,13 @@ begin
         mem[i] = 32'd0;
 end
 
-// Escrita na memória acontece na subida do clock.
 always @(posedge clk)
 begin
     if(MemWrite)
         mem[addr[31:2]] <= write_data;
 end
 
-// Leitura é feita de forma combinacional.
-always @(*)
-begin
-    if(MemRead)
-        read_data = mem[addr[31:2]];
-    else
-        read_data = 32'd0;
-end
+assign read_data = (MemRead) ? mem[addr[31:2]] : 32'd0;
 
 endmodule
 
@@ -424,7 +537,9 @@ wire [31:0] instruction;
 wire [31:0] ReadData1;
 wire [31:0] ReadData2;
 
-wire [3:0] ALUControl;
+wire [3:0] ALUControlFromFunct;
+wire [3:0] ALUControlFinal;
+
 wire [31:0] ALUResult;
 wire Zero;
 
@@ -439,6 +554,7 @@ wire [5:0] opcode;
 wire [4:0] rs;
 wire [4:0] rt;
 wire [4:0] rd;
+wire [4:0] shamt;
 wire [5:0] funct;
 wire [15:0] imm;
 wire [25:0] jump_addr;
@@ -447,8 +563,9 @@ assign opcode    = instruction[31:26];
 assign rs        = instruction[25:21];
 assign rt        = instruction[20:16];
 assign rd        = instruction[15:11];
-assign imm       = instruction[15:0];
+assign shamt     = instruction[10:6];
 assign funct     = instruction[5:0];
+assign imm       = instruction[15:0];
 assign jump_addr = instruction[25:0];
 
 
@@ -463,7 +580,15 @@ wire RegWrite;
 wire MemRead;
 wire MemWrite;
 wire Branch;
+wire BranchNE;
 wire Jump;
+wire Jal;
+
+wire ZeroExtend;
+wire Lui;
+
+wire ALUCtrlSrc;
+wire [3:0] ALUControlDirect;
 
 wire [1:0] ALUOp;
 
@@ -476,44 +601,85 @@ wire [4:0] WriteAddr;
 wire [31:0] WriteData;
 
 wire [31:0] SignExtImm;
+wire [31:0] ZeroExtImm;
+wire [31:0] ExtImm;
+wire [31:0] LuiResult;
+
 wire [31:0] ALUIn2;
 
 wire [31:0] PCPlus4;
+wire [31:0] PCPlus8;
 wire [31:0] BranchAddr;
 wire [31:0] JumpAddr;
 wire [31:0] PCAfterBranch;
-wire BranchTaken;
+wire [31:0] PCAfterJump;
 
-// Estende o imediato de 16 para 32 bits.
+wire BranchTaken;
+wire Jr;
+
+
+// _____________________________________
+// Imediatos
+// _____________________________________
+
 assign SignExtImm = {{16{imm[15]}}, imm};
+assign ZeroExtImm = {16'd0, imm};
+
+// Algumas instruções usam zero extend: andi, ori e xori.
+// As demais usam sign extend.
+assign ExtImm = (ZeroExtend) ? ZeroExtImm : SignExtImm;
+
+// lui coloca o imediato nos 16 bits mais altos.
+assign LuiResult = {imm, 16'h0000};
+
+
+// _____________________________________
+// MUXes principais
+// _____________________________________
 
 // Escolhe se a ULA usa registrador ou imediato.
-assign ALUIn2 = (ALUSrc) ? SignExtImm : ReadData2;
+assign ALUIn2 = (ALUSrc) ? ExtImm : ReadData2;
 
+// Para jal, escreve obrigatoriamente no registrador $31.
 // Tipo R escreve em rd. Tipo I escreve em rt.
-assign WriteAddr = (RegDst) ? rd : rt;
+assign WriteAddr = (Jal) ? 5'd31 :
+                   (RegDst) ? rd :
+                   rt;
 
-// lw escreve dado da memória. Outros escrevem resultado da ULA.
-assign WriteData = (MemtoReg) ? MemReadData : ALUResult;
+// Escolhe se o controle da ULA vem da ula_ctrl ou direto da ctrl.
+assign ALUControlFinal = (ALUCtrlSrc) ? ALUControlDirect : ALUControlFromFunct;
 
-// PC + 4 é o caminho normal.
+// Escolhe o dado que será escrito no banco de registradores.
+assign WriteData = (Jal) ? PCPlus8 :
+                   (Lui) ? LuiResult :
+                   (MemtoReg) ? MemReadData :
+                   ALUResult;
+
+
+// _____________________________________
+// Cálculo do próximo PC
+// _____________________________________
+
 assign PCPlus4 = PC + 4;
+assign PCPlus8 = PC + 8;
 
-// Para beq, o imediato é multiplicado por 4 usando shift left 2.
 assign BranchAddr = PCPlus4 + (SignExtImm << 2);
 
-// Para j, monta o endereço usando os 4 bits mais altos do PC+4,
-// os 26 bits da instrução e dois zeros no final.
 assign JumpAddr = {PCPlus4[31:28], jump_addr, 2'b00};
 
-// O branch só acontece se Branch=1 e a ULA disser que deu zero.
-assign BranchTaken = Branch & Zero;
+// beq desvia quando Zero = 1.
+// bne desvia quando Zero = 0.
+assign BranchTaken = (Branch & Zero) | (BranchNE & ~Zero);
 
-// Primeiro escolhe entre PC+4 e branch.
 assign PCAfterBranch = (BranchTaken) ? BranchAddr : PCPlus4;
 
-// Depois escolhe entre o resultado anterior e o jump.
-assign nextPC = (Jump) ? JumpAddr : PCAfterBranch;
+assign PCAfterJump = (Jump) ? JumpAddr : PCAfterBranch;
+
+// jr é tipo R com funct 001000.
+// Ele coloca o PC com o valor que está em R[rs].
+assign Jr = (opcode == 6'b000000) && (funct == 6'b001000);
+
+assign nextPC = (Jr) ? ReadData1 : PCAfterJump;
 
 
 // _____________________________________
@@ -542,7 +708,15 @@ ctrl ctrl0(
     .MemRead(MemRead),
     .MemWrite(MemWrite),
     .Branch(Branch),
+    .BranchNE(BranchNE),
     .Jump(Jump),
+    .Jal(Jal),
+
+    .ZeroExtend(ZeroExtend),
+    .Lui(Lui),
+
+    .ALUCtrlSrc(ALUCtrlSrc),
+    .ALUControlDirect(ALUControlDirect),
 
     .ALUOp(ALUOp)
 );
@@ -566,13 +740,14 @@ regfile regfile0(
 ula_ctrl alu_ctrl0(
     .ALUOp(ALUOp),
     .funct(funct),
-    .OP(ALUControl)
+    .OP(ALUControlFromFunct)
 );
 
 ula ula0(
     .In1(ReadData1),
     .In2(ALUIn2),
-    .OP(ALUControl),
+    .shamt(shamt),
+    .OP(ALUControlFinal),
 
     .result(ALUResult),
     .Zero_flag(Zero)
