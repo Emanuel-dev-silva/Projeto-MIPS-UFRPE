@@ -302,8 +302,7 @@ endmodule
 // Memória de Instruções
 //
 // Aqui fica o "programa" que o processador vai executar.
-// Cada posição guarda uma instrução de 32 bits.
-// Como o PC anda de 4 em 4, usamos addr[31:2].
+// Agora coloquei um beq para testar se o PC pula uma instrução.
 // _____________________________________
 
 module i_mem(
@@ -316,11 +315,12 @@ reg [31:0] mem [0:255];
 initial
 begin
     mem[0] = 32'h2009000A; // addi $t1, $zero, 10
-    mem[1] = 32'h200A0005; // addi $t2, $zero, 5
-    mem[2] = 32'h012A4020; // add  $t0, $t1, $t2
-    mem[3] = 32'h012A4822; // sub  $t1, $t1, $t2
-    mem[4] = 32'hAC080000; // sw   $t0, 0($zero)
-    mem[5] = 32'h8C0B0000; // lw   $t3, 0($zero)
+    mem[1] = 32'h200A000A; // addi $t2, $zero, 10
+    mem[2] = 32'h112A0001; // beq  $t1, $t2, 1  -> se forem iguais, pula a próxima
+    mem[3] = 32'h20080063; // addi $t0, $zero, 99 -> essa deve ser pulada
+    mem[4] = 32'h012A4020; // add  $t0, $t1, $t2 -> 10 + 10 = 20
+    mem[5] = 32'hAC080000; // sw   $t0, 0($zero)
+    mem[6] = 32'h8C0B0000; // lw   $t3, 0($zero)
 end
 
 assign instruction = mem[addr[31:2]];
@@ -413,10 +413,6 @@ wire [31:0] MemReadData;
 
 // _____________________________________
 // Separando os campos da instrução
-//
-// A instrução tem 32 bits.
-// Aqui pegamos pedaços dela: opcode, rs, rt, rd,
-// funct e imediato.
 // _____________________________________
 
 wire [5:0] opcode;
@@ -459,24 +455,34 @@ wire [31:0] WriteData;
 wire [31:0] SignExtImm;
 wire [31:0] ALUIn2;
 
-// O imediato tem 16 bits, mas a ULA trabalha com 32.
-// Então fazemos extensão de sinal.
+wire [31:0] PCPlus4;
+wire [31:0] BranchAddr;
+wire BranchTaken;
+
+// Estende o imediato de 16 para 32 bits.
 assign SignExtImm = {{16{imm[15]}}, imm};
 
-// Se ALUSrc for 1, a ULA usa o imediato.
-// Se for 0, usa o segundo registrador.
+// Escolhe se a ULA usa registrador ou imediato.
 assign ALUIn2 = (ALUSrc) ? SignExtImm : ReadData2;
 
-// Tipo R escreve em rd.
-// Tipo I escreve em rt.
+// Tipo R escreve em rd. Tipo I escreve em rt.
 assign WriteAddr = (RegDst) ? rd : rt;
 
-// Se for lw, escreve o dado vindo da memória.
-// Caso contrário, escreve o resultado da ULA.
+// lw escreve dado da memória. Outros escrevem resultado da ULA.
 assign WriteData = (MemtoReg) ? MemReadData : ALUResult;
 
-// Por enquanto o PC só anda para a próxima instrução.
-assign nextPC = PC + 4;
+// PC + 4 é o caminho normal.
+assign PCPlus4 = PC + 4;
+
+// Para beq, o imediato é multiplicado por 4 usando shift left 2.
+assign BranchAddr = PCPlus4 + (SignExtImm << 2);
+
+// O branch só acontece se Branch=1 e a ULA disser que deu zero.
+assign BranchTaken = Branch & Zero;
+
+// Se o beq for verdadeiro, vai para BranchAddr.
+// Caso contrário, segue para PC + 4.
+assign nextPC = (BranchTaken) ? BranchAddr : PCPlus4;
 
 
 // _____________________________________
@@ -555,10 +561,6 @@ d_mem dmem0(
 
 // _____________________________________
 // Saídas de debug
-//
-// Essas saídas são só para facilitar o teste.
-// Elas ajudam a ver o que está acontecendo
-// dentro do processador.
 // _____________________________________
 
 assign debug_pc = PC;
