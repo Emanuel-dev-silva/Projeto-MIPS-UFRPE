@@ -55,8 +55,6 @@ begin
         regs[WriteAddr] <= WriteData;
     end
 end
-
 assign ReadData1 = regs[ReadAddr1];
 assign ReadData2 = regs[ReadAddr2];
-
 endmodule
