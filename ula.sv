@@ -12,77 +12,117 @@
 // - Erick Matheus
 // - João Matheus
 //
-// Arquivo: ula.sv
+// Arquivo: ula_ctrl.v
 //
 // Descrição:
-// Implementa a Unidade Lógica e Aritmética.
-// A ULA realiza operações aritméticas, lógicas,
-// comparações e deslocamentos usados pelo MIPS.
-// O sinal OP escolhe a operação realizada.
+// Implementa o controle da ULA (ULA Control).
+// Recebe ALUOp da unidade de controle principal e o campo funct
+// extraído da instrução tipo R.
+// A saída OP define qual operação a ULA executará.
 // _____________________________________
 
-module ula(
-    input [31:0] In1,
-    input [31:0] In2,
-    input [4:0] shamt,
-    input [3:0] OP,
-
-    output reg [31:0] result,
-    output Zero_flag
+// ------------------------------------------------------------
+// Declaração do módulo ULA Control
+//
+// Entradas:
+//   ALUOp [1:0] - Sinal vindo da unidade de controle principal.
+//                 Indica a categoria da instrução:
+//                   2'b00 → instruções de memória (lw, sw) → soma
+//                   2'b01 → instruções de desvio (beq, bne) → subtração
+//                   2'b10 → instruções tipo R → decodificar campo funct
+//
+//   funct [5:0] - Campo funct dos 6 bits menos significativos
+//                 da instrução tipo R. Só é relevante quando ALUOp == 2'b10.
+//
+// Saída:
+//   OP    [3:0] - Código de operação enviado à ULA,
+//                 selecionando qual operação será executada.
+// ------------------------------------------------------------
+module ula_ctrl(
+    input  [1:0] ALUOp,
+    input  [5:0] funct,
+    output reg [3:0] OP
 );
 
-always @(*)
-begin
-    case(OP)
+// ------------------------------------------------------------
+// Bloco combinacional principal
+//
+// always @(*) garante reavaliação sempre que ALUOp ou funct
+// mudarem. Toda a lógica é combinacional (sem clock).
+// ------------------------------------------------------------
+always @(*) begin
 
-        4'b0000:
-            result = In1 + In2; // add, addi, lw, sw
+    case(ALUOp)
 
-        4'b0001:
-            result = In1 - In2; // sub, beq, bne
+        // ------------------------------------------------------
+        // ALUOp == 2'b00 — Instruções de memória (lw, sw)
+        //   - Calcula endereço: base + offset → operação de soma
+        //   - O campo funct é ignorado neste caso
+        // ------------------------------------------------------
+        2'b00:
+            OP = 4'b0000; // ADD
 
-        4'b0010:
-            result = In1 & In2; // and, andi
+        // ------------------------------------------------------
+        // ALUOp == 2'b01 — Instruções de desvio (beq, bne)
+        //   - Compara operandos via subtração
+        //   - Zero_flag da ULA indica se os valores são iguais
+        //   - O campo funct é ignorado neste caso
+        // ------------------------------------------------------
+        2'b01:
+            OP = 4'b0001; // SUB
 
-        4'b0011:
-            result = In1 | In2; // or, ori
+        // ------------------------------------------------------
+        // ALUOp == 2'b10 — Instruções tipo R
+        //   - A operação é determinada pelo campo funct
+        //   - Cada valor de funct mapeia para um OP da ULA
+        // ------------------------------------------------------
+        2'b10: begin
+            case(funct)
 
-        4'b0100:
-            result = In1 ^ In2; // xor, xori
+                // Operações aritméticas
+                6'b100000: OP = 4'b0000; // ADD  — adição com sinal
+                6'b100010: OP = 4'b0001; // SUB  — subtração com sinal
 
-        4'b0101:
-            result = ~(In1 | In2); // nor
+                // Operações lógicas
+                6'b100100: OP = 4'b0010; // AND  — E bit a bit
+                6'b100101: OP = 4'b0011; // OR   — OU bit a bit
+                6'b100110: OP = 4'b0100; // XOR  — OU exclusivo bit a bit
+                6'b100111: OP = 4'b0101; // NOR  — NOR bit a bit
 
-        4'b0110:
-            result = ($signed(In1) < $signed(In2)) ? 32'd1 : 32'd0; // slt, slti
+                // Comparações
+                6'b101010: OP = 4'b0110; // SLT  — set on less than (com sinal)
+                6'b101011: OP = 4'b0111; // SLTU — set on less than (sem sinal)
 
-        4'b0111:
-            result = (In1 < In2) ? 32'd1 : 32'd0; // sltu, sltiu
+                // Deslocamentos com shamt (quantidade fixa no campo da instrução)
+                6'b000000: OP = 4'b1000; // SLL  — shift left logical
+                6'b000010: OP = 4'b1001; // SRL  — shift right logical
+                6'b000011: OP = 4'b1010; // SRA  — shift right arithmetic
 
-        4'b1000:
-            result = In2 << shamt; // sll
+                // Deslocamentos variáveis (quantidade definida por registrador rs)
+                6'b000100: OP = 4'b1011; // SLLV — shift left logical variable
+                6'b000110: OP = 4'b1100; // SRLV — shift right logical variable
+                6'b000111: OP = 4'b1101; // SRAV — shift right arithmetic variable
 
-        4'b1001:
-            result = In2 >> shamt; // srl
+                // ----------------------------------------------
+                // funct não reconhecido
+                //   - Saída segura: soma (neutro)
+                //   - Evita comportamento indefinido em síntese
+                // ----------------------------------------------
+                default:
+                    OP = 4'b0000;
 
-        4'b1010:
-            result = $signed(In2) >>> shamt; // sra
+            endcase
+        end
 
-        4'b1011:
-            result = In2 << In1[4:0]; // sllv
-
-        4'b1100:
-            result = In2 >> In1[4:0]; // srlv
-
-        4'b1101:
-            result = $signed(In2) >>> In1[4:0]; // srav
-
+        // ------------------------------------------------------
+        // ALUOp não reconhecido
+        //   - Garante saída determinística para qualquer valor
+        //     inválido de ALUOp, evitando latch inferido
+        // ------------------------------------------------------
         default:
-            result = 32'd0;
+            OP = 4'b0000;
 
     endcase
 end
-
-assign Zero_flag = (result == 0);
 
 endmodule
