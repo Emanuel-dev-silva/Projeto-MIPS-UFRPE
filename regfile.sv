@@ -9,7 +9,7 @@
 // Grupo:
 // - Andrey Israel
 // - Emanuel Barbosa
-// - Erick Matheus
+// - Erick
 // - João Matheus
 //
 // Arquivo: regfile.sv
@@ -55,6 +55,8 @@ begin
         regs[WriteAddr] <= WriteData;
     end
 end
+
 assign ReadData1 = regs[ReadAddr1];
 assign ReadData2 = regs[ReadAddr2];
+
 endmodule
