@@ -21,21 +21,19 @@
 // Se reset estiver ativo, volta para zero.
 // _____________________________________
 
-    module pc(
+module pc(
     input clk,
     input reset,
     input [31:0] nextPC,
     output reg [31:0] PC
 );
 
- always @(posedge clk)
+always @(posedge clk)
 begin
     if(reset)
         PC <= 32'd0;
     else
         PC <= nextPC;
- end
+end
 
-
-    
-  endmodule
+endmodule
