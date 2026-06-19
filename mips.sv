@@ -9,16 +9,18 @@
 // Grupo:
 // - Andrey Israel
 // - Emanuel Barbosa
-// - Erick Matheus
+// - Erick
 // - João Matheus
 //
 // Arquivo: mips.sv
 //
 // Descrição:
-// Implementa o núcleo MIPS monociclo.
-// Integra PC, memória de instruções, controle,
-// banco de registradores, ULA e memória de dados.
-// Também calcula desvios, saltos, jr e jal.
+// Esse é o módulo principal do processador.
+// Aqui juntamos os outros módulos, como PC,
+// memória de instruções, controle, banco de
+// registradores, ULA e memória de dados.
+// Também fica aqui a lógica de branch, jump,
+// jal e jr.
 // _____________________________________
 
 module mips(
@@ -31,202 +33,306 @@ module mips(
     output [31:0] debug_mem_data
 );
 
-wire [31:0] PC;
-wire [31:0] nextPC;
-wire [31:0] instruction;
+    // _____________________________________
+    // Ligações principais do processador
+    // _____________________________________
 
-wire [31:0] ReadData1;
-wire [31:0] ReadData2;
+    wire [31:0] PC;
+    wire [31:0] nextPC;
+    wire [31:0] instruction;
 
-wire [3:0] ALUControlFromFunct;
-wire [3:0] ALUControlFinal;
+    wire [31:0] ReadData1;
+    wire [31:0] ReadData2;
 
-wire [31:0] ALUResult;
-wire Zero;
+    wire [3:0] ALUControlFromFunct;
+    wire [3:0] ALUControlFinal;
 
-wire [31:0] MemReadData;
+    wire [31:0] ALUResult;
+    wire Zero;
 
-wire [5:0] opcode;
-wire [4:0] rs;
-wire [4:0] rt;
-wire [4:0] rd;
-wire [4:0] shamt;
-wire [5:0] funct;
-wire [15:0] imm;
-wire [25:0] jump_addr;
+    wire [31:0] MemReadData;
 
-assign opcode    = instruction[31:26];
-assign rs        = instruction[25:21];
-assign rt        = instruction[20:16];
-assign rd        = instruction[15:11];
-assign shamt     = instruction[10:6];
-assign funct     = instruction[5:0];
-assign imm       = instruction[15:0];
-assign jump_addr = instruction[25:0];
+    // _____________________________________
+    // Separação dos campos da instrução
+    // _____________________________________
 
-wire RegDst;
-wire ALUSrc;
-wire MemtoReg;
-wire RegWrite;
-wire MemRead;
-wire MemWrite;
-wire Branch;
-wire BranchNE;
-wire Jump;
-wire Jal;
+    // Aqui dividimos a instrução nos campos do MIPS.
+    // Esses campos são usados pelo controle, banco de registradores e ULA.
+    wire [5:0] opcode;
+    wire [4:0] rs;
+    wire [4:0] rt;
+    wire [4:0] rd;
+    wire [4:0] shamt;
+    wire [5:0] funct;
+    wire [15:0] imm;
+    wire [25:0] jump_addr;
 
-wire ZeroExtend;
-wire Lui;
+    assign opcode    = instruction[31:26];
+    assign rs        = instruction[25:21];
+    assign rt        = instruction[20:16];
+    assign rd        = instruction[15:11];
+    assign shamt     = instruction[10:6];
+    assign funct     = instruction[5:0];
+    assign imm       = instruction[15:0];
+    assign jump_addr = instruction[25:0];
 
-wire ALUCtrlSrc;
-wire [3:0] ALUControlDirect;
+    // _____________________________________
+    // Sinais gerados pela unidade de controle
+    // _____________________________________
 
-wire [1:0] ALUOp;
+    wire RegDst;
+    wire ALUSrc;
+    wire MemtoReg;
+    wire RegWrite;
+    wire MemRead;
+    wire MemWrite;
+    wire Branch;
+    wire BranchNE;
+    wire Jump;
+    wire Jal;
 
-wire [4:0] WriteAddr;
-wire [31:0] WriteData;
+    wire ZeroExtend;
+    wire Lui;
 
-wire [31:0] SignExtImm;
-wire [31:0] ZeroExtImm;
-wire [31:0] ExtImm;
-wire [31:0] LuiResult;
+    wire ALUCtrlSrc;
+    wire [3:0] ALUControlDirect;
 
-wire [31:0] ALUIn2;
+    wire [1:0] ALUOp;
 
-wire [31:0] PCPlus4;
-wire [31:0] PCPlus8;
-wire [31:0] BranchAddr;
-wire [31:0] JumpAddr;
-wire [31:0] PCAfterBranch;
-wire [31:0] PCAfterJump;
+    // _____________________________________
+    // Fios auxiliares usados no caminho de dados
+    // _____________________________________
 
-wire BranchTaken;
-wire Jr;
-wire RegWriteFinal;
+    wire [4:0] WriteAddr;
+    wire [31:0] WriteData;
 
-assign SignExtImm = {{16{imm[15]}}, imm};
-assign ZeroExtImm = {16'd0, imm};
+    wire [31:0] SignExtImm;
+    wire [31:0] ZeroExtImm;
+    wire [31:0] ExtImm;
+    wire [31:0] LuiResult;
 
-assign ExtImm = (ZeroExtend) ? ZeroExtImm : SignExtImm;
+    wire [31:0] ALUIn2;
 
-assign LuiResult = {imm, 16'h0000};
+    wire [31:0] PCPlus4;
+    wire [31:0] BranchAddr;
+    wire [31:0] JumpAddr;
+    wire [31:0] PCAfterBranch;
+    wire [31:0] PCAfterJump;
 
-assign ALUIn2 = (ALUSrc) ? ExtImm : ReadData2;
+    wire BranchTaken;
+    wire Jr;
+    wire RegWriteFinal;
 
-assign WriteAddr = (Jal) ? 5'd31 :
-                   (RegDst) ? rd :
-                   rt;
+    // _____________________________________
+    // Tratamento do imediato
+    // _____________________________________
 
-assign ALUControlFinal = (ALUCtrlSrc) ? ALUControlDirect : ALUControlFromFunct;
+    // Algumas instruções usam o imediato com sinal, como addi, lw, sw, beq e bne.
+    assign SignExtImm = {{16{imm[15]}}, imm};
 
-assign WriteData = (Jal) ? PCPlus8 :
-                   (Lui) ? LuiResult :
-                   (MemtoReg) ? MemReadData :
-                   ALUResult;
+    // Outras usam o imediato completando com zero, como andi, ori e xori.
+    assign ZeroExtImm = {16'd0, imm};
 
-assign PCPlus4 = PC + 4;
-assign PCPlus8 = PC + 8;
+    // A unidade de controle escolhe qual tipo de extensão será usado.
+    assign ExtImm = (ZeroExtend) ? ZeroExtImm : SignExtImm;
 
-assign BranchAddr = PCPlus4 + (SignExtImm << 2);
+    // No lui, o imediato vai para a parte alta do registrador.
+    assign LuiResult = {imm, 16'h0000};
 
-assign JumpAddr = {PCPlus4[31:28], jump_addr, 2'b00};
+    // _____________________________________
+    // Entrada da ULA
+    // _____________________________________
 
-assign BranchTaken = (Branch & Zero) | (BranchNE & ~Zero);
+    // A segunda entrada da ULA pode vir do registrador ou do imediato.
+    // Isso depende do tipo da instrução.
+    assign ALUIn2 = (ALUSrc) ? ExtImm : ReadData2;
 
-assign PCAfterBranch = (BranchTaken) ? BranchAddr : PCPlus4;
+    // _____________________________________
+    // Escolha do registrador que receberá o resultado
+    // _____________________________________
 
-assign PCAfterJump = (Jump) ? JumpAddr : PCAfterBranch;
+    // No jal, o resultado vai para o registrador 31, que é o $ra.
+    // Em instruções tipo R, o destino é rd.
+    // Em várias instruções tipo I, o destino é rt.
+    assign WriteAddr = (Jal) ? 5'd31 :
+                       (RegDst) ? rd :
+                       rt;
 
-assign Jr = (opcode == 6'b000000) && (funct == 6'b001000);
+    // _____________________________________
+    // Escolha do controle final da ULA
+    // _____________________________________
 
-assign nextPC = (Jr) ? ReadData1 : PCAfterJump;
+    // Algumas instruções têm controle direto da ULA.
+    // Já as instruções tipo R usam o funct, passando pela ula_ctrl.
+    assign ALUControlFinal = (ALUCtrlSrc) ? ALUControlDirect : ALUControlFromFunct;
 
-// jr não deve escrever em registrador.
-assign RegWriteFinal = RegWrite & ~Jr;
+    // _____________________________________
+    // Valor que será escrito no banco de registradores
+    // _____________________________________
 
-pc pc0(
-    .clk(clk),
-    .reset(reset),
-    .nextPC(nextPC),
-    .PC(PC)
-);
+    // Aqui escolhemos o que volta para o banco de registradores.
+    // Pode ser PC+4 no jal, o resultado do lui, dado da memória ou resultado da ULA.
+    // No teste do professor, o jal precisa salvar PC+4 no $ra.
+    assign WriteData = (Jal) ? PCPlus4 :
+                       (Lui) ? LuiResult :
+                       (MemtoReg) ? MemReadData :
+                       ALUResult;
 
-i_mem imem0(
-    .addr(PC),
-    .i_out(instruction),
-    .instruction()
-);
+    // _____________________________________
+    // Cálculo do próximo PC
+    // _____________________________________
 
-ctrl ctrl0(
-    .opcode(opcode),
+    // Normalmente o PC só anda para a próxima instrução.
+    assign PCPlus4 = PC + 4;
 
-    .RegDst(RegDst),
-    .ALUSrc(ALUSrc),
-    .MemtoReg(MemtoReg),
-    .RegWrite(RegWrite),
-    .MemRead(MemRead),
-    .MemWrite(MemWrite),
-    .Branch(Branch),
-    .BranchNE(BranchNE),
-    .Jump(Jump),
-    .Jal(Jal),
+    // Endereço usado quando acontece um branch.
+    assign BranchAddr = PCPlus4 + (SignExtImm << 2);
 
-    .ZeroExtend(ZeroExtend),
-    .Lui(Lui),
+    // Endereço usado nas instruções de jump.
+    assign JumpAddr = {PCPlus4[31:28], jump_addr, 2'b00};
 
-    .ALUCtrlSrc(ALUCtrlSrc),
-    .ALUControlDirect(ALUControlDirect),
+    // beq desvia quando a ULA indica zero.
+    // bne desvia quando a ULA não indica zero.
+    assign BranchTaken = (Branch & Zero) | (BranchNE & ~Zero);
 
-    .ALUOp(ALUOp)
-);
+    // Primeiro escolhemos entre seguir normal ou fazer branch.
+    assign PCAfterBranch = (BranchTaken) ? BranchAddr : PCPlus4;
 
-regfile regfile0(
-    .ReadAddr1(rs),
-    .ReadAddr2(rt),
+    // Depois escolhemos se vai ter jump.
+    assign PCAfterJump = (Jump) ? JumpAddr : PCAfterBranch;
 
-    .ReadData1(ReadData1),
-    .ReadData2(ReadData2),
+    // O jr é identificado pelo opcode de tipo R e pelo funct específico.
+    assign Jr = (opcode == 6'b000000) && (funct == 6'b001000);
 
-    .Clock(clk),
-    .Reset(reset),
+    // Se for jr, o próximo PC vem do registrador rs.
+    // Caso contrário, segue a lógica normal.
+    assign nextPC = (Jr) ? ReadData1 : PCAfterJump;
 
-    .WriteAddr(WriteAddr),
-    .WriteData(WriteData),
+    // Como jr só muda o PC, ele não deve escrever no banco de registradores.
+    assign RegWriteFinal = RegWrite & ~Jr;
 
-    .RegWrite(RegWriteFinal)
-);
+    // _____________________________________
+    // PC
+    // _____________________________________
 
-ula_ctrl alu_ctrl0(
-    .ALUOp(ALUOp),
-    .funct(funct),
-    .OP(ALUControlFromFunct)
-);
+    pc pc0(
+        .clk(clk),
+        .reset(reset),
+        .nextPC(nextPC),
+        .PC(PC)
+    );
 
-ula ula0(
-    .In1(ReadData1),
-    .In2(ALUIn2),
-    .shamt(shamt),
-    .OP(ALUControlFinal),
+    // _____________________________________
+    // Memória de instruções
+    // _____________________________________
 
-    .result(ALUResult),
-    .Zero_flag(Zero)
-);
+    // A instrução atual é buscada usando o valor do PC.
+    i_mem imem0(
+        .addr(PC),
+        .i_out(instruction),
+        .instruction()
+    );
 
-d_mem dmem0(
-    .clk(clk),
+    // _____________________________________
+    // Unidade de controle
+    // _____________________________________
 
-    .MemRead(MemRead),
-    .MemWrite(MemWrite),
+    // A unidade de controle olha o opcode e ativa os sinais necessários.
+    ctrl ctrl0(
+        .opcode(opcode),
 
-    .addr(ALUResult),
-    .write_data(ReadData2),
+        .RegDst(RegDst),
+        .ALUSrc(ALUSrc),
+        .MemtoReg(MemtoReg),
+        .RegWrite(RegWrite),
+        .MemRead(MemRead),
+        .MemWrite(MemWrite),
+        .Branch(Branch),
+        .BranchNE(BranchNE),
+        .Jump(Jump),
+        .Jal(Jal),
 
-    .read_data(MemReadData)
-);
+        .ZeroExtend(ZeroExtend),
+        .Lui(Lui),
 
-assign debug_pc = PC;
-assign debug_instruction = instruction;
-assign debug_alu_result = ALUResult;
-assign debug_mem_data = MemReadData;
+        .ALUCtrlSrc(ALUCtrlSrc),
+        .ALUControlDirect(ALUControlDirect),
+
+        .ALUOp(ALUOp)
+    );
+
+    // _____________________________________
+    // Banco de registradores
+    // _____________________________________
+
+    // O banco de registradores lê rs e rt.
+    // Quando permitido, escreve o resultado no registrador escolhido.
+    regfile regfile0(
+        .ReadAddr1(rs),
+        .ReadAddr2(rt),
+
+        .ReadData1(ReadData1),
+        .ReadData2(ReadData2),
+
+        .Clock(clk),
+        .Reset(reset),
+
+        .WriteAddr(WriteAddr),
+        .WriteData(WriteData),
+
+        .RegWrite(RegWriteFinal)
+    );
+
+    // _____________________________________
+    // Controle da ULA
+    // _____________________________________
+
+    // Esse módulo usa o ALUOp e o funct para definir a operação da ULA.
+    ula_ctrl alu_ctrl0(
+        .ALUOp(ALUOp),
+        .funct(funct),
+        .OP(ALUControlFromFunct)
+    );
+
+    // _____________________________________
+    // ULA
+    // _____________________________________
+
+    // A ULA faz as operações aritméticas, lógicas, comparações e shifts.
+    ula ula0(
+        .In1(ReadData1),
+        .In2(ALUIn2),
+        .shamt(shamt),
+        .OP(ALUControlFinal),
+
+        .result(ALUResult),
+        .Zero_flag(Zero)
+    );
+
+    // _____________________________________
+    // Memória de dados
+    // _____________________________________
+
+    // A memória de dados é usada principalmente nas instruções lw e sw.
+    d_mem dmem0(
+        .clk(clk),
+
+        .MemRead(MemRead),
+        .MemWrite(MemWrite),
+
+        .addr(ALUResult),
+        .write_data(ReadData2),
+
+        .read_data(MemReadData)
+    );
+
+    // _____________________________________
+    // Saídas para acompanhar no testbench
+    // _____________________________________
+
+    assign debug_pc = PC;
+    assign debug_instruction = instruction;
+    assign debug_alu_result = ALUResult;
+    assign debug_mem_data = MemReadData;
 
 endmodule
