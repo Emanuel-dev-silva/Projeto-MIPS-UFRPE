@@ -158,6 +158,8 @@ wire [31:0] debug_pc;
 wire [31:0] debug_instruction;
 wire [31:0] debug_alu_result;
 wire [31:0] debug_mem_data;
+integer ciclo;
+
 
 mips mips_test(
     .clk(clk),
@@ -439,69 +441,19 @@ begin
 
     reset = 0;
     #1;
-
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+for(ciclo = 0; ciclo < 100; ciclo = ciclo + 1)
+begin
+    $display("CICLO=%0d MIPS -> PC=%d IDX=%d INSTR=%h ALU_DEC=%d ALU_HEX=%h MEM=%d",
+             ciclo,
+             debug_pc,
+             debug_pc[31:2],
+             debug_instruction,
+             debug_alu_result,
+             debug_alu_result,
+             debug_mem_data);
 
     #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
-
-    #10;
-    $display("MIPS -> PC=%d INSTR=%h ALU=%d MEM=%d",
-             debug_pc, debug_instruction, debug_alu_result, debug_mem_data);
+end
 
     $display("_____________________________________");
     $display("Fim dos testes");
